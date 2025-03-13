@@ -1,134 +1,122 @@
-# Corn DON Concentration Predictor
+# DON Concentration Predictor
 
-This project implements a machine learning pipeline for predicting DON (Deoxynivalenol) concentration in corn samples using hyperspectral imaging data. The system uses a deep learning model with attention mechanism to achieve high accuracy in predictions.
-
-## Performance Metrics
-
-The model achieves the following performance on the test set:
-- R² Score: 0.9058
-- RMSE: 5,131.81 ppb
-- MAE: 3,295.69 ppb
+A deep learning system for predicting DON (Deoxynivalenol) concentration in corn samples using hyperspectral data.
 
 ## Project Structure
 
 ```
 .
-├── app.py                  # FastAPI application
-├── attention.py           # Attention mechanism implementation
-├── data_preprocessing.py  # Data preprocessing functions
-├── Dockerfile            # Docker configuration
-├── main.py              # Main training script
-├── model.py             # Model architecture
-├── requirements.txt     # Project dependencies
-├── streamlit_app.py     # Streamlit web interface
-├── visualization.py     # Visualization utilities
-└── tests/              # Unit tests
+├── src/
+│   ├── models/
+│   │   ├── attention.py
+│   │   └── don_predictor.py
+│   ├── preprocessing/
+│   │   └── data_processor.py
+│   ├── utils/
+│   │   ├── metrics.py
+│   │   ├── visualization.py
+│   │   └── logger.py
+│   └── config/
+│       └── config.py
+├── tests/
+│   ├── models/
+│   ├── utils/
+│   └── integration/
+├── docs/
+│   ├── api/
+│   ├── models/
+│   └── examples/
+├── notebooks/
+│   ├── exploration/
+│   └── training/
+├── data/
+│   └── corn_hyperspectral.csv
+├── logs/
+├── models/
+└── plots/
 ```
 
 ## Features
 
-- Data preprocessing pipeline with automated quality checks
-- Deep learning model with attention mechanism
-- Comprehensive visualization tools
-- FastAPI REST API for predictions
-- Interactive Streamlit web interface
-- Docker containerization
-- Unit tests and documentation
+- Deep learning model with attention mechanism for DON concentration prediction
+- Comprehensive data preprocessing pipeline
+- Cross-validation with performance metrics
+- Feature importance analysis
+- Visualization tools for model evaluation
+- Memory-efficient training process
+- Extensive logging and error handling
+- Configuration management system
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/corn-don-predictor.git
-cd corn-don-predictor
+git clone https://github.com/yourusername/don-concentration-predictor.git
+cd don-concentration-predictor
 ```
 
-2. Create a virtual environment and install dependencies:
+2. Create a virtual environment (recommended):
 ```bash
 python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+3. Install dependencies:
+```bash
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-### Training the Model
+1. Configure the model and training parameters in `src/config/config.py` or create a custom YAML configuration file.
 
-To train the model:
+2. Run the training script:
 ```bash
-python main.py
+python src/train.py
 ```
 
-### Running the API
+3. Monitor the training process through the logs in the `logs` directory.
 
-Start the FastAPI server:
-```bash
-uvicorn app:app --host 0.0.0.0 --port 8000
-```
-
-### Running the Streamlit App
-
-Launch the web interface:
-```bash
-streamlit run streamlit_app.py
-```
-
-### Docker Deployment
-
-Build and run the Docker container:
-```bash
-docker build -t corn-don-predictor .
-docker run -p 8000:8000 corn-don-predictor
-```
-
-## API Documentation
-
-The API provides the following endpoints:
-
-- `GET /`: Root endpoint with API information
-- `POST /predict`: Make predictions from spectral data
-- `GET /health`: Health check endpoint
-
-Example API request:
-```python
-import requests
-
-url = "http://localhost:8000/predict"
-data = {
-    "features": [/* 448 spectral values */]
-}
-response = requests.post(url, json=data)
-prediction = response.json()
-```
+4. View training results and model performance in the `plots` directory.
 
 ## Model Architecture
 
-The model uses a combination of:
-- Multi-head self-attention layers
-- Batch normalization
-- Dropout for regularization
-- Dense layers with L2 regularization
+The model uses a combination of dense layers and multi-head self-attention mechanism to process hyperspectral data:
 
-## Data Preprocessing
+- Input layer for hyperspectral features
+- Multi-head self-attention layer for capturing feature interactions
+- Multiple dense layers with batch normalization and dropout
+- Output layer for DON concentration prediction
 
-The pipeline includes:
-- Missing value handling
-- Feature scaling
-- Outlier detection
-- Automated quality checks
+## Configuration
 
-## Visualization Tools
+The project uses a flexible configuration system that can be modified through:
 
-The project includes tools for:
-- Spectral data visualization
-- Feature correlation analysis
-- Training history plots
-- Prediction results visualization
-- Data quality assessment
+1. Default configuration in `src/config/config.py`
+2. Custom YAML configuration files
+3. Runtime parameter updates
 
-## Testing
+Key configuration sections:
+- Data preprocessing parameters
+- Model architecture settings
+- Training hyperparameters
+- File paths and directories
 
-Run the test suite:
+## Development
+
+For development:
+
+1. Install development dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+2. Install pre-commit hooks:
+```bash
+pre-commit install
+```
+
+3. Run tests:
 ```bash
 pytest tests/
 ```
@@ -145,7 +133,20 @@ pytest tests/
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Acknowledgments
+## Citation
 
-- Thanks to the TensorFlow team for their excellent framework
-- The attention mechanism implementation is inspired by the Transformer architecture 
+If you use this code in your research, please cite:
+
+```bibtex
+@software{don_concentration_predictor,
+  author = {Your Name},
+  title = {DON Concentration Predictor},
+  year = {2024},
+  publisher = {GitHub},
+  url = {https://github.com/yourusername/don-concentration-predictor}
+}
+```
+
+## Contact
+
+For questions and feedback, please contact [your.email@example.com](mailto:your.email@example.com).
