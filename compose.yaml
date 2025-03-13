@@ -8,11 +8,47 @@
 # database or a cache. For examples, see the Awesome Compose repository:
 # https://github.com/docker/awesome-compose
 services:
-  server:
+  api:
     build:
       context: .
     ports:
       - 8000:8000
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+    command: uvicorn src.api.main:app --host=0.0.0.0 --port=8000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  streamlit:
+    build:
+      context: .
+    ports:
+      - 8501:8501
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+    command: streamlit run src/streamlit_app.py
+    depends_on:
+      api:
+        condition: service_healthy
+
+  streamlit_sklearn:
+    build:
+      context: .
+    ports:
+      - 8502:8501
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+    command: streamlit run src/streamlit_app_simple_sklearn.py
+    depends_on:
+      api:
+        condition: service_healthy
 
 # The commented out section below is an example of how to define a PostgreSQL
 # database that your application can use. `depends_on` tells Docker Compose to

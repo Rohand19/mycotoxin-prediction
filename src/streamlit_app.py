@@ -5,22 +5,53 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from io import StringIO
+import sys
+import os
 
-from models.don_predictor import DONPredictor
-from preprocessing.data_processor import DataProcessor
-from utils.data_quality import DataQualityAnalyzer
-from utils.metrics import calculate_metrics
-from utils.visualization import plot_predictions
+# Add the parent directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Now import the modules
+try:
+    # When running from project root
+    from src.models.don_predictor import DONPredictor
+    from src.preprocessing.data_processor import DataProcessor
+    from src.utils.data_quality import DataQualityAnalyzer
+    from src.utils.metrics import calculate_metrics
+    from src.utils.visualization import plot_predictions
+except ImportError:
+    # When running from within src directory
+    from models.don_predictor import DONPredictor
+    from preprocessing.data_processor import DataProcessor
+    from utils.data_quality import DataQualityAnalyzer
+    from utils.metrics import calculate_metrics
+    from utils.visualization import plot_predictions
 
 def load_model_and_processor():
     """Load the trained model and data processor."""
     try:
-        model = DONPredictor.load('models/best_model.keras')
+        st.info("Loading model and processor... This may take a moment.")
+        
+        # First try to load the processor
         processor = DataProcessor()
+        st.info("Loading scalers...")
         processor.load_scalers('models/X_scaler.pkl', 'models/y_scaler.pkl')
+        
+        # Then try to load the model
+        st.info("Loading TensorFlow model...")
+        model = DONPredictor.load('models/best_model.keras')
+        
+        # Check if we're using the fallback model
+        if hasattr(model, 'model') and model.model.__class__.__name__ == 'Sequential' and len(model.model.layers) == 13:
+            st.warning("⚠️ Using a simplified substitute model. Predictions may be less accurate.")
+        else:
+            st.success("Model and processor loaded successfully!")
+            
         return model, processor
     except Exception as e:
         st.error(f"Error loading model: {str(e)}")
+        import traceback
+        st.error(f"Traceback: {traceback.format_exc()}")
         return None, None
 
 def main():
@@ -32,12 +63,61 @@ def main():
     prediction feature.
     """)
     
-    # Initialize model and processor
-    model, processor = load_model_and_processor()
+    # Add option to skip model loading
+    skip_model = st.checkbox("Skip model loading (use demo mode)", value=False, 
+                            help="Check this if you're experiencing issues with model loading")
+    
+    if skip_model:
+        st.warning("Running in demo mode. Prediction functionality is disabled.")
+        model, processor = None, None
+    else:
+        # Initialize model and processor
+        model, processor = load_model_and_processor()
+    
     if model is None or processor is None:
-        st.error("Failed to load model. Please check if model files exist.")
+        if not skip_model:
+            st.error("Failed to load model. Please check if model files exist.")
+            
+            # Provide options to the user
+            st.warning("You can still explore the app interface without making predictions.")
+            
+            if st.button("Try loading model again"):
+                st.experimental_rerun()
+        
+        # Show a demo interface without actual prediction functionality
+        st.subheader("Demo Interface (Predictions Disabled)")
+        
+        # Sidebar
+        st.sidebar.title("Navigation")
+        page = st.sidebar.radio("Go to", ["Single Prediction", "Batch Prediction", "Data Analysis"])
+        
+        if page == "Single Prediction":
+            st.header("Single Sample Prediction (Demo)")
+            st.write("Enter spectral values manually or upload a CSV file with a single row.")
+            st.info("Prediction functionality is disabled because the model failed to load.")
+            
+            upload_method = st.radio("Choose input method:", ["Manual Entry", "File Upload"])
+            
+            if upload_method == "Manual Entry":
+                st.write("This would normally show input fields for spectral values.")
+            else:
+                st.file_uploader("Upload CSV file", type="csv", disabled=True)
+                
+        elif page == "Batch Prediction":
+            st.header("Batch Prediction (Demo)")
+            st.write("Upload a CSV file with multiple samples for batch prediction.")
+            st.info("Prediction functionality is disabled because the model failed to load.")
+            st.file_uploader("Upload CSV file", type="csv", disabled=True)
+            
+        else:  # Data Analysis
+            st.header("Data Analysis (Demo)")
+            st.write("Upload your data for quality analysis and visualization.")
+            st.info("Analysis functionality is disabled because the model failed to load.")
+            st.file_uploader("Upload CSV file", type="csv", disabled=True)
+            
         return
     
+    # If model loaded successfully, continue with the normal app
     # Sidebar
     st.sidebar.title("Navigation")
     page = st.sidebar.radio("Go to", ["Single Prediction", "Batch Prediction", "Data Analysis"])

@@ -136,6 +136,19 @@ class DataProcessor:
             raise ValueError("Y-scaler not fitted. Run preprocess first.")
         return self.y_scaler.inverse_transform(y_scaled.reshape(-1, 1)).ravel()
     
+    def scale_features(self, X):
+        """Scale features using the fitted X_scaler.
+        
+        Args:
+            X (array-like): Features to scale
+            
+        Returns:
+            array-like: Scaled features
+        """
+        if self.X_scaler is None:
+            raise ValueError("X-scaler not fitted. Load scalers first.")
+        return self.X_scaler.transform(X)
+    
     def save_scalers(self, x_scaler_path, y_scaler_path):
         """Save fitted scalers to disk.
         

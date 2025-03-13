@@ -2,12 +2,13 @@
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
-from typing import List
+from typing import List, Optional, Dict
 import numpy as np
-import tensorflow as tf
 import logging
 import sys
 import os
+import joblib
+import psutil
 
 # Add the parent directory to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -15,15 +16,22 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 # Now import the modules
 try:
     # When running from project root
-    from src.models.don_predictor import DONPredictor
-    from src.preprocessing.data_processor import DataProcessor
+    from src.models.simple_predictor import SimplePredictor
 except ImportError:
     # When running from within src directory
-    from models.don_predictor import DONPredictor
-    from preprocessing.data_processor import DataProcessor
+    from models.simple_predictor import SimplePredictor
+
+# Get configuration from environment variables
+MODEL_PATH = os.environ.get('MODEL_PATH', 'models/rf_model_real_data.joblib')
+X_SCALER_PATH = os.environ.get('X_SCALER_PATH', 'models/X_scaler_real.pkl')
+Y_SCALER_PATH = os.environ.get('Y_SCALER_PATH', 'models/y_scaler_real.pkl')
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO')
 
 # Setup logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 # Initialize FastAPI app
@@ -44,24 +52,12 @@ app = FastAPI(
     
     1. Use the `/predict` endpoint to get predictions for spectral data
     2. Monitor the service health using the `/health` endpoint
-    
-    For more information, visit the [GitHub repository](https://github.com/yourusername/don-concentration-predictor)
     """,
-    version="1.0.0",
-    contact={
-        "name": "Your Name",
-        "email": "your.email@example.com",
-        "url": "https://github.com/yourusername/don-concentration-predictor"
-    },
-    license_info={
-        "name": "MIT",
-        "url": "https://opensource.org/licenses/MIT"
-    }
+    version="1.0.0"
 )
 
-# Initialize model and processor
+# Initialize model
 model = None
-processor = None
 
 class SpectralData(BaseModel):
     """Request model for spectral data."""
@@ -91,9 +87,9 @@ class PredictionResponse(BaseModel):
         default="ppb",
         description="Units of measurement"
     )
-    confidence_interval: dict = Field(
-        ...,
-        description="95% confidence interval for the prediction",
+    confidence_interval: Optional[Dict[str, float]] = Field(
+        None,
+        description="Confidence interval for the prediction (if available)",
         example={"lower": 100.0, "upper": 150.0}
     )
 
@@ -110,29 +106,52 @@ class HealthResponse(BaseModel):
         description="Whether the model is loaded",
         example=True
     )
-    processor_loaded: bool = Field(
-        ...,
-        description="Whether the data processor is loaded",
-        example=True
-    )
     memory_usage: float = Field(
         ...,
         description="Current memory usage in MB",
         example=1234.56
     )
+    model_type: str = Field(
+        ...,
+        description="Type of model being used",
+        example="RandomForest"
+    )
 
 @app.on_event("startup")
 async def load_model():
-    """Load the model and processor on startup."""
-    global model, processor
+    """Load the model on startup."""
+    global model
     try:
-        model = DONPredictor.load('models/best_model.keras')
-        processor = DataProcessor()
-        processor.load_scalers('models/X_scaler.pkl', 'models/y_scaler.pkl')
-        logger.info("Model and processor loaded successfully")
+        logger.info(f"Loading model from {MODEL_PATH}")
+        logger.info(f"Loading X scaler from {X_SCALER_PATH}")
+        logger.info(f"Loading Y scaler from {Y_SCALER_PATH}")
+        
+        # Check if model files exist
+        if not os.path.exists(MODEL_PATH):
+            logger.error(f"Model file not found: {MODEL_PATH}")
+            raise FileNotFoundError(f"Model file not found: {MODEL_PATH}")
+            
+        if not os.path.exists(X_SCALER_PATH):
+            logger.error(f"X scaler file not found: {X_SCALER_PATH}")
+            raise FileNotFoundError(f"X scaler file not found: {X_SCALER_PATH}")
+            
+        if not os.path.exists(Y_SCALER_PATH):
+            logger.error(f"Y scaler file not found: {Y_SCALER_PATH}")
+            raise FileNotFoundError(f"Y scaler file not found: {Y_SCALER_PATH}")
+        
+        # Load the scikit-learn model
+        model = SimplePredictor()
+        model.model = joblib.load(MODEL_PATH)
+        
+        # Load the scalers
+        model.X_scaler = joblib.load(X_SCALER_PATH)
+        model.y_scaler = joblib.load(Y_SCALER_PATH)
+        
+        logger.info("Model and scalers loaded successfully")
     except Exception as e:
         logger.error(f"Error loading model: {str(e)}")
-        raise
+        # Don't raise here to allow the API to start even if model loading fails
+        # The health endpoint will report the issue
 
 @app.get("/",
          summary="Root endpoint",
@@ -140,7 +159,7 @@ async def load_model():
 async def root():
     """Root endpoint."""
     return {
-        "message": "DON Concentration Prediction API",
+        "message": "DON Concentration Prediction API (scikit-learn version)",
         "version": "1.0.0",
         "docs_url": "/docs",
         "redoc_url": "/redoc"
@@ -153,11 +172,18 @@ async def root():
           Makes a prediction of DON concentration based on input spectral data.
           
           The input should be a list of 448 spectral reflectance values.
-          Returns the predicted concentration in ppb along with confidence intervals.
+          Returns the predicted concentration in ppb.
           """)
 async def predict(data: SpectralData):
     """Predict DON concentration from spectral data."""
     try:
+        # Check if model is loaded
+        if model is None or model.model is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Model not loaded. Please check server logs."
+            )
+            
         # Validate input
         if len(data.values) != 448:
             raise HTTPException(
@@ -165,29 +191,37 @@ async def predict(data: SpectralData):
                 detail=f"Expected 448 spectral bands, got {len(data.values)}"
             )
         
-        # Preprocess input
+        # Check for non-numeric values
+        if not all(isinstance(x, (int, float)) for x in data.values):
+            raise HTTPException(
+                status_code=400,
+                detail="All values must be numeric"
+            )
+        
+        # Preprocess input and make prediction using the model's internal scaling
         X = np.array(data.values).reshape(1, -1)
-        X_scaled = processor.scale_features(X)
         
-        # Make prediction
-        y_scaled = model.model.predict(X_scaled)
-        y_pred = processor.inverse_transform_target(y_scaled)
+        try:
+            y_scaled = model.predict(X)
+            y_pred = model.inverse_transform_target(y_scaled)
+            
+            return {
+                "don_concentration": float(y_pred[0][0]),
+                "units": "ppb"
+            }
+        except Exception as e:
+            logger.error(f"Prediction error: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Prediction error: {str(e)}"
+            )
         
-        # Calculate confidence intervals
-        confidence_interval = {
-            "lower": float(y_pred[0] * 0.9),  # Simplified example
-            "upper": float(y_pred[0] * 1.1)
-        }
-        
-        return {
-            "don_concentration": float(y_pred[0]),
-            "units": "ppb",
-            "confidence_interval": confidence_interval
-        }
-        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
-        logger.error(f"Prediction error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
 
 @app.get("/health",
          response_model=HealthResponse,
@@ -196,15 +230,24 @@ async def predict(data: SpectralData):
 async def health():
     """Health check endpoint."""
     try:
-        import psutil
         process = psutil.Process()
         memory_usage = process.memory_info().rss / 1024 / 1024  # Convert to MB
         
+        model_loaded = model is not None and model.model is not None
+        model_type = "RandomForest" if model_loaded else "None"
+        
+        if model_loaded:
+            try:
+                # Try to get more specific model type
+                model_type = model.model.__class__.__name__
+            except:
+                pass
+        
         return {
-            "status": "healthy",
-            "model_loaded": model is not None,
-            "processor_loaded": processor is not None,
-            "memory_usage": memory_usage
+            "status": "healthy" if model_loaded else "degraded",
+            "model_loaded": model_loaded,
+            "memory_usage": memory_usage,
+            "model_type": model_type
         }
     except Exception as e:
         logger.error(f"Health check error: {str(e)}")

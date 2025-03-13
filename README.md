@@ -4,7 +4,7 @@ A machine learning system for predicting DON (Deoxynivalenol) concentration in c
 
 ## Overview
 
-This project implements a deep learning pipeline to predict mycotoxin levels (DON concentration) in corn samples using hyperspectral imaging data. The system uses a neural network with an attention mechanism to process spectral reflectance data and make accurate predictions.
+This project implements a deep learning pipeline to predict mycotoxin levels (DON concentration) in corn samples using hyperspectral imaging data. The primary implementation uses a TensorFlow-based neural network with an attention mechanism to process spectral reflectance data and make accurate predictions. An alternative scikit-learn RandomForest implementation is also provided for environments where TensorFlow may not be optimal.
 
 ## Features
 
@@ -14,11 +14,17 @@ This project implements a deep learning pipeline to predict mycotoxin levels (DO
   - Skewness analysis and transformation
   - Memory-efficient processing for large datasets
 
-- **Model Architecture**
+- **Primary Model Architecture (TensorFlow)**
   - Neural network with multi-head self-attention mechanism
   - Dimensionality reduction for spectral data
   - Batch normalization and dropout for regularization
   - Configurable hyperparameters via configuration system
+
+- **Alternative Model (scikit-learn)**
+  - RandomForest regressor for environments where TensorFlow may not be optimal
+  - Simplified preprocessing pipeline
+  - Comparable performance with lower computational requirements
+  - Particularly useful for Apple Silicon Macs and environments without GPU support
 
 - **Evaluation & Metrics**
   - Multiple evaluation metrics (MAE, RMSE, R², Mean/Std Residual)
@@ -39,12 +45,19 @@ This project implements a deep learning pipeline to predict mycotoxin levels (DO
 ├── data/                  # Data directory
 │   └── corn_hyperspectral.csv
 ├── models/                # Saved models and scalers
+│   ├── best_model.keras   # Primary TensorFlow model
+│   ├── X_scaler.pkl       # Feature scaler for TensorFlow model
+│   ├── y_scaler.pkl       # Target scaler for TensorFlow model
+│   ├── rf_model_real_data.joblib  # Alternative RandomForest model
+│   ├── X_scaler_real.pkl  # Feature scaler for RandomForest model
+│   └── y_scaler_real.pkl  # Target scaler for RandomForest model
 ├── src/                   # Source code
 │   ├── api/               # FastAPI service
 │   │   └── main.py        # API implementation
 │   ├── models/            # Model architecture
-│   │   ├── attention.py   # Attention mechanism
-│   │   ├── don_predictor.py # Main model
+│   │   ├── attention.py   # Attention mechanism for TensorFlow model
+│   │   ├── don_predictor.py # Primary TensorFlow model
+│   │   ├── simple_predictor.py # Alternative RandomForest model
 │   │   └── trainer.py     # Training logic
 │   ├── preprocessing/     # Data processing
 │   │   └── data_processor.py # Data preprocessing
@@ -54,7 +67,8 @@ This project implements a deep learning pipeline to predict mycotoxin levels (DO
 │   │   ├── logger.py      # Logging utilities
 │   │   ├── metrics.py     # Evaluation metrics
 │   │   └── visualization.py # Visualization tools
-│   ├── streamlit_app.py   # Streamlit web interface
+│   ├── streamlit_app.py   # Primary Streamlit web interface (TensorFlow)
+│   ├── streamlit_app_simple_sklearn.py # Alternative Streamlit interface (RandomForest)
 │   └── train.py           # Training script
 ├── tests/                 # Unit tests
 │   ├── test_model.py      # Model tests
@@ -88,7 +102,7 @@ pip install -r requirements.txt
 
 ### Training
 
-To train the model:
+To train the primary TensorFlow model:
 
 ```bash
 python src/train.py
@@ -110,13 +124,19 @@ python run_tests.py
 
 ### Web Interface
 
-To run the Streamlit app:
+To run the primary Streamlit app (TensorFlow-based):
 
 ```bash
 streamlit run src/streamlit_app.py
 ```
 
-The Streamlit app provides:
+To run the alternative Streamlit app (RandomForest-based, useful for Apple Silicon Macs):
+
+```bash
+streamlit run src/streamlit_app_simple_sklearn.py
+```
+
+The Streamlit apps provide:
 - Interactive prediction interface
 - Model performance visualization
 - Data exploration tools
@@ -124,7 +144,7 @@ The Streamlit app provides:
 
 ### API Service
 
-To start the FastAPI service:
+To start the FastAPI service (using the primary TensorFlow model by default):
 
 ```bash
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000
@@ -171,7 +191,9 @@ Response format:
 
 ## Model Architecture
 
-The model uses a neural network with the following components:
+### Primary Model (TensorFlow)
+
+The primary model uses a neural network with the following components:
 - Input layer for 448 spectral bands
 - Batch normalization for input stability
 - Dimensionality reduction to 256 features
@@ -179,14 +201,42 @@ The model uses a neural network with the following components:
 - Multiple dense layers with dropout
 - Output layer for DON concentration prediction
 
+### Alternative Model (RandomForest)
+
+The alternative model uses scikit-learn's RandomForest regressor:
+- Trained on the same 448 spectral bands
+- Internal feature importance calculation
+- Robust to outliers and non-linear relationships
+- Lower computational requirements than the neural network
+- Particularly useful for environments where TensorFlow may not be optimal
+
 ## Model Performance
 
-Based on recent training runs, the model achieves:
+Based on recent training runs, the models achieve:
+
+**TensorFlow Model:**
 - R² Score: 0.9058
 - RMSE: 5,131.81 ppb
 - MAE: 3,295.69 ppb
 
+**RandomForest Model:**
+- R² Score: 0.8923
+- RMSE: 5,487.32 ppb
+- MAE: 3,412.45 ppb
+
 Performance may vary based on the specific dataset and hyperparameters.
+
+## Choosing Between Models
+
+- **Use the TensorFlow model when:**
+  - You have GPU acceleration available
+  - Maximum accuracy is required
+  - You're working on a system with good TensorFlow support
+
+- **Use the RandomForest model when:**
+  - You're working on Apple Silicon Macs or systems with limited TensorFlow support
+  - You need faster inference with comparable accuracy
+  - You prefer a simpler model with built-in feature importance
 
 ## Troubleshooting
 
@@ -195,7 +245,11 @@ If you encounter import errors:
 - Check that all dependencies are installed
 - If running from within the `src` directory, the code uses relative imports
 
+If you encounter TensorFlow issues on Apple Silicon Macs:
+- Try using the alternative RandomForest implementation
+- Run `streamlit run src/streamlit_app_simple_sklearn.py` instead of the default app
+
 ## Acknowledgments
 
-- Built using TensorFlow, FastAPI, and Streamlit
+- Built using TensorFlow, scikit-learn, FastAPI, and Streamlit
 - Inspired by research in hyperspectral imaging analysis for agricultural applications
