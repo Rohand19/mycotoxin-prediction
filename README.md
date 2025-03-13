@@ -252,4 +252,4 @@ If you encounter TensorFlow issues on Apple Silicon Macs:
 ## Acknowledgments
 
 - Built using TensorFlow, scikit-learn, FastAPI, and Streamlit
-- Inspired by research in hyperspectral imaging analysis for agricultural applications
+- Built using Cursor IDE
