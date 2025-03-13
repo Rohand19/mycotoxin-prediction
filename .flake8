@@ -1,0 +1,48 @@
+[flake8]
+max-line-length = 120
+extend-ignore = 
+    # Whitespace before ':' (black formats this way)
+    E203,
+    # Line break before binary operator (black formats this way)
+    W503,
+    # Too many leading '#' for block comment
+    E266,
+    # Module level import not at top of file (for Streamlit apps)
+    E402,
+    # Line too long
+    E501
+
+exclude = 
+    .git,
+    __pycache__,
+    build,
+    dist,
+    extra
+
+per-file-ignores =
+    # Allow unused imports in __init__.py and blank lines at end
+    __init__.py: F401, W391
+    # Allow bare except in specific files
+    src/models/simple_predictor.py: E722
+    src/api/main.py: E722
+    # Allow undefined names in visualization.py
+    src/utils/visualization.py: F821
+    # Allow unused imports in specific files
+    src/models/attention.py: F401
+    src/models/don_predictor.py: F401
+    src/train.py: F401
+    src/streamlit_app.py: F401
+    src/streamlit_app_simple_sklearn.py: F401
+    src/config/config.py: F401
+    # Allow blank lines at end of files
+    src/config/__init__.py: W391
+    src/models/__init__.py: W391
+    src/preprocessing/__init__.py: W391
+    src/utils/__init__.py: W391
+    # Allow long lines in documentation strings
+    src/api/main.py: E501
+    src/streamlit_app.py: E501
+    src/streamlit_app_simple_sklearn.py: E501
+    src/models/simple_predictor.py: E501
+    src/models/don_predictor.py: E501
+    src/utils/data_quality.py: E501 

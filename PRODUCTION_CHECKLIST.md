@@ -11,6 +11,8 @@ This checklist ensures that the DON Concentration Predictor is ready for product
 - [x] No hardcoded credentials or sensitive information
 - [x] Integration tests properly configured
 - [x] CI pipeline handles TensorFlow issues gracefully
+- [x] Code style automation scripts created
+- [x] Flake8 configuration customized for project needs
 
 ## Model
 
