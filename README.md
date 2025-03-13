@@ -139,14 +139,14 @@ If you use this code in your research, please cite:
 
 ```bibtex
 @software{don_concentration_predictor,
-  author = {Your Name},
+  author = {Rohan D},
   title = {DON Concentration Predictor},
-  year = {2024},
+  year = {2025},
   publisher = {GitHub},
-  url = {https://github.com/yourusername/don-concentration-predictor}
+  url = {https://github.com/Rohand19/don-concentration-predictor}
 }
 ```
 
 ## Contact
 
-For questions and feedback, please contact [your.email@example.com](mailto:your.email@example.com).
+For questions and feedback, please contact [rohanb2000@gmail.com](mailto:rohanb2000@gmail.com).
