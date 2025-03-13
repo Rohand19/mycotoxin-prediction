@@ -51,7 +51,7 @@ A deep learning system for predicting DON (Deoxynivalenol) concentration in corn
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/don-concentration-predictor.git
+git clone https://github.com/Rohand19/don-concentration-predictor.git
 cd don-concentration-predictor
 ```
 
