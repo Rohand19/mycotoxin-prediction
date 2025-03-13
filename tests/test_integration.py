@@ -40,13 +40,32 @@ class TestPipeline:
         
         # Initialize components
         processor = DataProcessor()
+        
+        # Create a DataFrame with target column for preprocessing
+        df = X.copy()
+        df['vomitoxin_ppb'] = y  # Add target column with default name
+        
+        # Fit the data to create scalers
+        X_scaled, y_scaled = processor.preprocess(df)
+        
+        # Verify the scalers are fitted
+        assert processor.X_scaler is not None
+        assert processor.y_scaler is not None
+        
+        # Save and load scalers to test that functionality
+        x_scaler_path = os.path.join(temp_model_dir, "x_scaler_test.pkl")
+        y_scaler_path = os.path.join(temp_model_dir, "y_scaler_test.pkl")
+        processor.save_scalers(x_scaler_path, y_scaler_path)
+        
+        # Create a new processor with loaded scalers
+        loaded_processor = DataProcessor.load_scalers(x_scaler_path, y_scaler_path)
+        
+        # Test data processing with loaded scalers
+        X_scaled_loaded = loaded_processor.scale_features(X)
+        assert X_scaled_loaded.shape == X.shape
+        
+        # Initialize and test the model
         model = DONPredictor(input_shape=X.shape[1])
-        
-        # Test data processing
-        X_scaled = processor.scale_features(X)
-        assert X_scaled.shape == X.shape
-        
-        # Test model training
         model.build((None, X.shape[1]))
         
         # Test model saving and loading
