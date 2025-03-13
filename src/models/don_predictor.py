@@ -10,7 +10,13 @@ from tensorflow.keras.layers import Dense, Input, Dropout, BatchNormalization
 from tensorflow.keras.regularizers import l2
 import numpy as np
 
-from src.models.attention import MultiHeadSelfAttention
+# Use a try-except block to handle different import scenarios
+try:
+    # When running from project root (for tests)
+    from src.models.attention import MultiHeadSelfAttention
+except ImportError:
+    # When running from within src directory
+    from models.attention import MultiHeadSelfAttention
 
 class DONPredictor:
     """Deep learning model for DON concentration prediction."""
