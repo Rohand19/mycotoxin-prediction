@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import Layer
 
+
 # Register the custom attention layer for serialization
 @tf.keras.utils.register_keras_serializable(package="src.models")
 class MultiHeadSelfAttention(Layer):
@@ -122,10 +123,10 @@ class MultiHeadSelfAttention(Layer):
     @classmethod
     def from_config(cls, config):
         """Create a MultiHeadSelfAttention layer from its config.
-        
+
         Args:
             config: Dictionary with the configuration
-            
+
         Returns:
             A new MultiHeadSelfAttention instance
         """

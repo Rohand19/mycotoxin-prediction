@@ -135,11 +135,11 @@ class DONPredictor:
         """Load a saved model."""
         try:
             import tensorflow as tf
-            
+
             # Import the custom layer class for proper deserialization
             from src.models.attention import MultiHeadSelfAttention
 
-            # Disable GPU    
+            # Disable GPU
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
             gpus = tf.config.experimental.list_physical_devices("GPU")
@@ -151,18 +151,12 @@ class DONPredictor:
                     print(f"Memory growth setting error: {e}")
 
             # Define custom objects for deserialization
-            custom_objects = {
-                'MultiHeadSelfAttention': MultiHeadSelfAttention
-            }
+            custom_objects = {"MultiHeadSelfAttention": MultiHeadSelfAttention}
 
             try:
                 # Load the model with custom objects
                 print(f"Loading model from {filepath}...")
-                model = tf.keras.models.load_model(
-                    filepath, 
-                    custom_objects=custom_objects,
-                    compile=False
-                )
+                model = tf.keras.models.load_model(filepath, custom_objects=custom_objects, compile=False)
                 print("Model loaded successfully!")
             except Exception as e:
                 print(f"Error loading model: {e}")
