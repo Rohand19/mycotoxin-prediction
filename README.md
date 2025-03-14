@@ -48,9 +48,9 @@ This project implements a deep learning pipeline to predict mycotoxin levels (DO
 │   ├── best_model.keras   # Primary TensorFlow model
 │   ├── X_scaler.pkl       # Feature scaler for TensorFlow model
 │   ├── y_scaler.pkl       # Target scaler for TensorFlow model
-│   ├── rf_model_real_data.joblib  # Alternative RandomForest model
-│   ├── X_scaler_real.pkl  # Feature scaler for RandomForest model
-│   └── y_scaler_real.pkl  # Target scaler for RandomForest model
+│   ├── rf_model_rf.joblib  # Alternative RandomForest model
+│   ├── X_scaler_rf.pkl  # Feature scaler for RandomForest model
+│   └── y_scaler_rf.pkl  # Target scaler for RandomForest model
 ├── src/                   # Source code
 │   ├── api/               # FastAPI service
 │   │   └── main.py        # API implementation
