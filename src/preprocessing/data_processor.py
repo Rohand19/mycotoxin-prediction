@@ -121,7 +121,6 @@ class DataProcessor:
                 y = np.log1p(y)  # log(1+x) transform for better handling of small values
                 logger.info(f"After log transform - min: {np.min(y):.2f}, max: {np.max(y):.2f}, mean: {np.mean(y):.2f}")
 
-            
             self.y_scaler = RobustScaler(quantile_range=self.config["robust_quantile_range"])
             y_scaled = self.y_scaler.fit_transform(y.reshape(-1, 1)).ravel()
 
