@@ -31,23 +31,49 @@ class MultiHeadSelfAttention(Layer):
         self.input_dim = input_shape[-1]
 
         # Query, Key, and Value weight matrices
-        self.query_dense = tf.keras.layers.Dense(self.output_dim, use_bias=self.use_bias, name="query")
-        self.key_dense = tf.keras.layers.Dense(self.output_dim, use_bias=self.use_bias, name="key")
-        self.value_dense = tf.keras.layers.Dense(self.output_dim, use_bias=self.use_bias, name="value")
+        self.query_dense = tf.keras.layers.Dense(
+            self.output_dim,
+            use_bias=self.use_bias,
+            name="query",
+            dtype=tf.float32
+        )
+        self.key_dense = tf.keras.layers.Dense(
+            self.output_dim,
+            use_bias=self.use_bias,
+            name="key",
+            dtype=tf.float32
+        )
+        self.value_dense = tf.keras.layers.Dense(
+            self.output_dim,
+            use_bias=self.use_bias,
+            name="value",
+            dtype=tf.float32
+        )
 
         # Output projection
-        self.combine_heads = tf.keras.layers.Dense(self.input_dim, use_bias=self.use_bias, name="output")
+        self.combine_heads = tf.keras.layers.Dense(
+            self.input_dim,
+            use_bias=self.use_bias,
+            name="output",
+            dtype=tf.float32
+        )
 
         # Dropout layer
         self.dropout_layer = tf.keras.layers.Dropout(self.dropout)
 
     def attention(self, query, key, value, mask=None):
         """Compute scaled dot-product attention."""
+        # Ensure inputs are float32
+        query = tf.cast(query, tf.float32)
+        key = tf.cast(key, tf.float32)
+        value = tf.cast(value, tf.float32)
+
         score = tf.matmul(query, key, transpose_b=True)
         dim_key = tf.cast(tf.shape(key)[-1], tf.float32)
         scaled_score = score / tf.math.sqrt(dim_key)
 
         if mask is not None:
+            mask = tf.cast(mask, tf.float32)
             scaled_score += mask * -1e9
 
         weights = tf.nn.softmax(scaled_score, axis=-1)
@@ -58,6 +84,7 @@ class MultiHeadSelfAttention(Layer):
 
     def separate_heads(self, x):
         """Separate the input into multiple heads."""
+        x = tf.cast(x, tf.float32)
         batch_size = tf.shape(x)[0]
         length = tf.shape(x)[1]
 
@@ -66,6 +93,8 @@ class MultiHeadSelfAttention(Layer):
         return tf.transpose(x, perm=[0, 2, 1, 3])
 
     def call(self, inputs, mask=None, return_attention=False, training=None):
+        # Ensure inputs are float32
+        inputs = tf.cast(inputs, tf.float32)
         batch_size = tf.shape(inputs)[0]
         length = tf.shape(inputs)[1]
 

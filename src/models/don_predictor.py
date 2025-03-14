@@ -38,77 +38,101 @@ class DONPredictor:
     def _default_config(self):
         """Default model configuration."""
         return {
-            "l2_lambda": 0.001,
-            "attention_heads": 2,
-            "attention_dim": 16,
-            "dropout_rate": 0.1,
-            "dense_layers": [128, 64, 32],
-            "learning_rate": 0.001,
+            'l2_lambda': 0.001,
+            'attention_heads': 8,
+            'attention_dim': 32,
+            'dropout_rate': 0.15,
+            'dense_layers': [256, 128, 64],
+            'learning_rate': 0.0003
         }
 
     def build(self):
         """Build the model architecture."""
         l2_lambda = self.config["l2_lambda"]
-
-        model = Sequential()
-
-        # Input layer
-        model.add(Input(shape=(self.input_shape,), name="input"))
-        model.add(BatchNormalization(name="batch_norm_1"))
-
-        # Dimensionality reduction
-        model.add(
-            Dense(
-                256,
-                activation="relu",
-                kernel_regularizer=l2(l2_lambda),
-                name="reduction",
-            )
-        )
-        model.add(BatchNormalization())
-
-        # Reshape for attention
-        model.add(tf.keras.layers.Reshape((1, 256)))
-
-        # Attention mechanism
-        model.add(
+        
+        # Create a Sequential model similar to the reference
+        model = Sequential([
+            # Input layer with explicit dtype
+            Input(shape=(self.input_shape,), dtype=tf.float32, name="input"),
+            BatchNormalization(name="batch_norm_1"),
+            
+            # Reshape for attention - critical step
+            tf.keras.layers.Reshape((1, self.input_shape)),
+            
+            # First attention block - 8 heads like reference
             MultiHeadSelfAttention(
                 num_heads=self.config["attention_heads"],
                 head_dim=self.config["attention_dim"],
                 dropout=self.config["dropout_rate"],
-                name="attention_1",
-            )
+                name="attention_1"
+            ),
+            tf.keras.layers.LayerNormalization(epsilon=1e-6),
+            
+            # Second attention block - 4 heads like reference
+            MultiHeadSelfAttention(
+                num_heads=4,
+                head_dim=self.config["attention_dim"],
+                dropout=self.config["dropout_rate"],
+                name="attention_2"
+            ),
+            tf.keras.layers.LayerNormalization(epsilon=1e-6),
+            
+            # Global average pooling to reduce dimension
+            tf.keras.layers.GlobalAveragePooling1D(),
+            
+            # Dense layers with regularization as in reference
+            Dense(256, activation="relu", kernel_regularizer=l2(l2_lambda), name="dense_1"),
+            BatchNormalization(),
+            Dropout(0.25),
+            
+            Dense(128, activation="relu", kernel_regularizer=l2(l2_lambda), name="dense_2"),
+            BatchNormalization(),
+            Dropout(0.25),
+            
+            Dense(64, activation="relu", kernel_regularizer=l2(l2_lambda), name="dense_3"),
+            BatchNormalization(),
+            Dropout(0.15),
+            
+            # Output layer
+            Dense(1, dtype=tf.float32, name="output")
+        ])
+        
+        # Learning rate schedule like reference
+        initial_learning_rate = self.config["learning_rate"]
+        decay_steps = 3000  # More aggressive decay
+        decay_rate = 0.95   # Slightly more aggressive decay rate
+        learning_rate_schedule = tf.keras.optimizers.schedules.ExponentialDecay(
+            initial_learning_rate, 
+            decay_steps, 
+            decay_rate, 
+            staircase=True
         )
-        model.add(tf.keras.layers.LayerNormalization(epsilon=1e-6))
-        model.add(tf.keras.layers.GlobalAveragePooling1D())
-
-        # Dense layers
-        for i, units in enumerate(self.config["dense_layers"]):
-            model.add(
-                Dense(
-                    units,
-                    activation="relu",
-                    kernel_regularizer=l2(l2_lambda),
-                    name=f"dense_{i + 1}",
-                )
-            )
-            model.add(BatchNormalization())
-            model.add(Dropout(self.config["dropout_rate"] * (1 - i * 0.25)))
-
-        # Output layer
-        model.add(Dense(1, name="output"))
-
-        # Optimizer
+        
+        # Log the learning rate schedule
+        print(f"Initial learning rate: {initial_learning_rate}")
+        print(f"Learning rate after 10 epochs (~300 steps): {learning_rate_schedule(3000).numpy():.6f}")
+        print(f"Learning rate after 50 epochs (~1500 steps): {learning_rate_schedule(15000).numpy():.6f}")
+        print(f"Learning rate after 100 epochs (~3000 steps): {learning_rate_schedule(30000).numpy():.6f}")
+        
+        # Optimizer with gradient clipping
         optimizer = tf.keras.optimizers.Adam(
-            learning_rate=self.config["learning_rate"],
+            learning_rate=learning_rate_schedule,
             clipnorm=1.0,
             beta_1=0.9,
             beta_2=0.999,
-            epsilon=1e-07,
+            epsilon=1e-07
         )
-
-        model.compile(optimizer=optimizer, loss="mean_squared_error", metrics=["mae"])
-
+        
+        # Compile with MSE like reference
+        model.compile(
+            optimizer=optimizer,
+            loss="mean_squared_error",
+            metrics=[
+                "mae", 
+                tf.keras.metrics.RootMeanSquaredError()
+            ]
+        )
+        
         self.model = model
         return self.model
 
@@ -128,14 +152,11 @@ class DONPredictor:
     def load(cls, filepath):
         """Load a saved model."""
         try:
-            # Set TensorFlow to use lower precision for faster loading on Apple Silicon
             import tensorflow as tf
 
-            # Disable GPU for model loading if it's causing issues
-            # This can help with initialization problems on Apple Silicon
+            # Disable GPU    
             os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
-            # Configure TensorFlow to use less memory
             gpus = tf.config.experimental.list_physical_devices("GPU")
             if gpus:
                 try:
@@ -151,9 +172,7 @@ class DONPredictor:
                 print("Model loaded successfully!")
             except Exception as e:
                 print(f"Error loading model: {e}")
-                print("Creating a simple substitute model instead...")
-                # If loading fails, create a simple substitute model
-                model = cls._create_simple_model(448)  # Assuming 448 input features
+                raise ValueError(f"Failed to load model from {filepath}: {str(e)}")
 
             # Compile the model after loading
             model.compile(optimizer="adam", loss="mean_squared_error", metrics=["mae"])
@@ -163,29 +182,5 @@ class DONPredictor:
             return instance
         except Exception as e:
             raise ValueError(f"Failed to load model: {str(e)}")
-
-    @staticmethod
-    def _create_simple_model(input_shape):
-        """Create a simple model without custom layers as a fallback."""
-        import tensorflow as tf
-
-        model = tf.keras.Sequential(
-            [
-                tf.keras.layers.Input(shape=(input_shape,)),
-                tf.keras.layers.Dense(256, activation="relu"),
-                tf.keras.layers.BatchNormalization(),
-                tf.keras.layers.Dropout(0.2),
-                tf.keras.layers.Dense(128, activation="relu"),
-                tf.keras.layers.BatchNormalization(),
-                tf.keras.layers.Dropout(0.2),
-                tf.keras.layers.Dense(64, activation="relu"),
-                tf.keras.layers.BatchNormalization(),
-                tf.keras.layers.Dropout(0.1),
-                tf.keras.layers.Dense(32, activation="relu"),
-                tf.keras.layers.BatchNormalization(),
-                tf.keras.layers.Dense(1),
-            ]
-        )
-
-        print("Simple substitute model created successfully!")
-        return model
+    
+    

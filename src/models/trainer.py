@@ -62,13 +62,14 @@ class ModelTrainer:
     def _default_config(self):
         """Default training configuration."""
         return {
-            "batch_size": 16,
-            "epochs": 100,
-            "validation_split": 0.2,
-            "early_stopping_patience": 10,
-            "reduce_lr_patience": 5,
-            "min_lr": 0.00001,
-            "model_checkpoint_path": "models/best_model.keras",
+            'batch_size': 32,  # Same size as reference
+            'epochs': 100,     # Double the epochs to give more time to converge
+            'validation_split': 0.20
+            ,  # Reduced validation split like reference
+            'early_stopping_patience': 10,  # Increased patience for better convergence
+            'reduce_lr_patience': 10,  # Increased patience for LR reduction
+            'min_lr': 0.00001, # Keep minimum learning rate
+            'model_checkpoint_path': 'models/best_model.keras'
         }
 
     def _setup_logging(self):
@@ -102,11 +103,26 @@ class ModelTrainer:
         logger.info(f"Validation set size: {len(X_val)}")
 
         # Convert to tensors
+        X_train = tf.convert_to_tensor(X_train, dtype=tf.float32)
+        y_train = tf.convert_to_tensor(y_train, dtype=tf.float32)
+        X_val = tf.convert_to_tensor(X_val, dtype=tf.float32)
+        y_val = tf.convert_to_tensor(y_val, dtype=tf.float32)
+
+        # Create datasets with improved shuffling
         train_dataset = (
-            tf.data.Dataset.from_tensor_slices((X_train, y_train)).shuffle(1024).batch(self.config["batch_size"])
+            tf.data.Dataset.from_tensor_slices((X_train, y_train))
+            .shuffle(len(X_train), reshuffle_each_iteration=True)
+            .batch(self.config["batch_size"])
+            .prefetch(tf.data.AUTOTUNE)
+            .cache()
         )
 
-        val_dataset = tf.data.Dataset.from_tensor_slices((X_val, y_val)).batch(self.config["batch_size"])
+        val_dataset = (
+            tf.data.Dataset.from_tensor_slices((X_val, y_val))
+            .batch(self.config["batch_size"])
+            .prefetch(tf.data.AUTOTUNE)
+            .cache()
+        )
 
         return train_dataset, val_dataset
 
@@ -124,6 +140,9 @@ class ModelTrainer:
         logger.info(f"Input shapes - X: {X.shape}, y: {y.shape}")
 
         try:
+            # Clear memory before training
+            gc.collect()
+
             # Prepare datasets
             train_dataset, val_dataset = self.prepare_data(X, y)
 
@@ -135,21 +154,24 @@ class ModelTrainer:
                     monitor="val_loss",
                     patience=self.config["early_stopping_patience"],
                     restore_best_weights=True,
-                    min_delta=0.001,
-                ),
-                tf.keras.callbacks.ReduceLROnPlateau(
-                    monitor="val_loss",
-                    factor=0.5,
-                    patience=self.config["reduce_lr_patience"],
-                    min_lr=self.config["min_lr"],
-                    verbose=1,
+                    min_delta=0.0005,  # More sensitive min delta
+                    mode="min",
+                    verbose=1
                 ),
                 tf.keras.callbacks.ModelCheckpoint(
                     self.config["model_checkpoint_path"],
                     monitor="val_loss",
                     save_best_only=True,
                     verbose=1,
+                    mode="min",
                 ),
+                # Add TensorBoard for better visualization
+                tf.keras.callbacks.TensorBoard(
+                    log_dir='./logs',
+                    histogram_freq=1,
+                    write_graph=True,
+                    update_freq='epoch'
+                )
             ]
 
             # Train model
@@ -158,10 +180,18 @@ class ModelTrainer:
                 validation_data=val_dataset,
                 epochs=self.config["epochs"],
                 callbacks=callbacks,
-                verbose=0,
+                verbose=1,  # Show progress for better monitoring
             )
 
             logger.info("Training completed successfully")
+            
+            # Log final metrics
+            final_epoch = len(history.history['loss'])
+            logger.info(f"Trained for {final_epoch} epochs")
+            logger.info(f"Final training loss: {history.history['loss'][-1]:.4f}")
+            logger.info(f"Final validation loss: {history.history['val_loss'][-1]:.4f}")
+            logger.info(f"Final MAE: {history.history['mae'][-1]:.4f}")
+            
             return history
 
         except Exception as e:

@@ -65,29 +65,21 @@ class TestPipeline:
         assert X_scaled_loaded.shape == X.shape
         
         # Test model functionality
-        try:
-            # Initialize the model
-            model = DONPredictor(input_shape=X.shape[1])
-            # Build the model
-            model.build()
-            
-            # Test model saving
-            model_path = os.path.join(temp_model_dir, "test_model.keras")
-            model.save(model_path)
-            
-            # Test model loading
-            try:
-                loaded_model = DONPredictor.load(model_path)
-                assert loaded_model is not None
-                assert hasattr(loaded_model, 'model')
-            except Exception as e:
-                # If loading fails, it's acceptable in CI environments
-                # where TensorFlow might have compatibility issues
-                pytest.skip(f"Model loading failed: {str(e)}")
-        except Exception as e:
-            # Skip if TensorFlow has issues in the CI environment
-            pytest.skip(f"TensorFlow model building failed: {str(e)}")
-            
+        
+        # Initialize the model
+        model = DONPredictor(input_shape=X.shape[1])
+        # Build the model
+        model.build()
+        
+        # Test model saving
+        model_path = os.path.join(temp_model_dir, "test_model.keras")
+        model.save(model_path)
+        
+        # Test model loading
+        loaded_model = DONPredictor.load(model_path)
+        assert loaded_model is not None
+        assert hasattr(loaded_model, 'model')
+        
     @pytest.mark.skip(reason="Requires httpx package")
     def test_api_integration(self, sample_data):
         """Test the FastAPI endpoints."""

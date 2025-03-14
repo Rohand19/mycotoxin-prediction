@@ -135,59 +135,48 @@ class SimplePredictor:
         """Load a saved model or create a new one if loading fails."""
         instance = cls()
 
-        # If no filepath provided or file doesn't exist, create a new model
+        # If no filepath provided or file doesn't exist, create and train a new model
         if filepath is None or not os.path.exists(filepath):
             print("Creating new RandomForest model...")
             instance.create_model()
 
-            if train_on_real_data:
-                try:
-                    print("Training model on real data...")
-                    # Load the actual dataset
-                    data_path = os.path.join("data", "corn_hyperspectral.csv")
-                    if os.path.exists(data_path):
-                        # Load and preprocess the data
-                        data = pd.read_csv(data_path)
+            try:
+                print("Training model on real data...")
+                # Load the actual dataset
+                data_path = os.path.join("data", "corn_hyperspectral.csv")
+                if not os.path.exists(data_path):
+                    raise FileNotFoundError(f"Dataset not found at {data_path}")
 
-                        # Remove non-numeric columns (like 'hsi_id')
-                        non_numeric_cols = data.select_dtypes(exclude=["number"]).columns.tolist()
-                        if non_numeric_cols:
-                            print(f"Removing non-numeric columns: {', '.join(non_numeric_cols)}")
-                            data = data.select_dtypes(include=["number"])
+                # Load and preprocess the data
+                data = pd.read_csv(data_path)
 
-                        # Extract features and target
-                        X = data.iloc[:, :-1].values  # All columns except the last one
-                        y = data.iloc[:, -1].values  # Last column (vomitoxin_ppb)
+                # Remove non-numeric columns (like 'hsi_id')
+                non_numeric_cols = data.select_dtypes(exclude=["number"]).columns.tolist()
+                if non_numeric_cols:
+                    print(f"Removing non-numeric columns: {', '.join(non_numeric_cols)}")
+                    data = data.select_dtypes(include=["number"])
 
-                        print(f"Training on {X.shape[0]} samples with {X.shape[1]} features")
-                        instance.fit(X, y)
-                        print("Model trained on real data successfully!")
+                # Extract features and target
+                X = data.iloc[:, :-1].values  # All columns except the last one
+                y = data.iloc[:, -1].values  # Last column (vomitoxin_ppb)
 
-                        # Save the trained model and scalers
-                        os.makedirs("models", exist_ok=True)
-                        instance.save("models/rf_model_real_data.joblib")
-                        instance.save_scalers(
-                            "models/X_scaler_real.pkl",
-                            "models/y_scaler_real.pkl",
-                        )
-                        print("Model and scalers saved to disk")
+                print(f"Training on {X.shape[0]} samples with {X.shape[1]} features")
+                instance.fit(X, y)
+                print("Model trained successfully!")
 
-                        return instance
-                    else:
-                        print(f"Warning: Could not find dataset at {data_path}")
-                        print("Falling back to synthetic data...")
-                except Exception as e:
-                    print(f"Error training on real data: {e}")
-                    print("Falling back to synthetic data...")
+                # Save the trained model and scalers
+                os.makedirs("models", exist_ok=True)
+                instance.save("models/rf_model_real_data.joblib")
+                instance.save_scalers(
+                    "models/X_scaler_real.pkl",
+                    "models/y_scaler_real.pkl",
+                )
+                print("Model and scalers saved to disk")
 
-            # Create some synthetic training data to initialize the model
-            print("Training model on synthetic data...")
-            X_synthetic = np.random.rand(100, 448)  # 100 samples, 448 features
-            y_synthetic = np.random.uniform(500, 2000, size=100)  # Random DON values
-            instance.fit(X_synthetic, y_synthetic)
+                return instance
 
-            print("Model created and trained on synthetic data")
-            return instance
+            except Exception as e:
+                raise ValueError(f"Failed to train model on real data: {str(e)}")
 
         # Try to load the saved model
         try:
@@ -196,58 +185,4 @@ class SimplePredictor:
             print("Model loaded successfully!")
             return instance
         except Exception as e:
-            print(f"Error loading model: {e}")
-            print("Creating new RandomForest model instead...")
-
-            # Create and train a new model using the same process as above
-            if train_on_real_data:
-                try:
-                    print("Training model on real data...")
-                    # Load the actual dataset
-                    data_path = os.path.join("data", "corn_hyperspectral.csv")
-                    if os.path.exists(data_path):
-                        # Load and preprocess the data
-                        data = pd.read_csv(data_path)
-
-                        # Remove non-numeric columns (like 'hsi_id')
-                        non_numeric_cols = data.select_dtypes(exclude=["number"]).columns.tolist()
-                        if non_numeric_cols:
-                            print(f"Removing non-numeric columns: {', '.join(non_numeric_cols)}")
-                            data = data.select_dtypes(include=["number"])
-
-                        # Extract features and target
-                        X = data.iloc[:, :-1].values  # All columns except the last one
-                        y = data.iloc[:, -1].values  # Last column (vomitoxin_ppb)
-
-                        print(f"Training on {X.shape[0]} samples with {X.shape[1]} features")
-                        instance.fit(X, y)
-                        print("Model trained on real data successfully!")
-
-                        # Save the trained model and scalers
-                        os.makedirs("models", exist_ok=True)
-                        instance.save("models/rf_model_real_data.joblib")
-                        instance.save_scalers(
-                            "models/X_scaler_real.pkl",
-                            "models/y_scaler_real.pkl",
-                        )
-                        print("Model and scalers saved to disk")
-
-                        return instance
-                    else:
-                        print(f"Warning: Could not find dataset at {data_path}")
-                        print("Falling back to synthetic data...")
-                except Exception as e:
-                    print(f"Error training on real data: {e}")
-                    print("Falling back to synthetic data...")
-
-            # Create and train a new model
-            instance.create_model()
-
-            # Create some synthetic training data to initialize the model
-            print("Training model on synthetic data...")
-            X_synthetic = np.random.rand(100, 448)  # 100 samples, 448 features
-            y_synthetic = np.random.uniform(500, 2000, size=100)  # Random DON values
-            instance.fit(X_synthetic, y_synthetic)
-
-            print("Model created and trained on synthetic data")
-            return instance
+            raise ValueError(f"Failed to load model from {filepath}: {str(e)}")

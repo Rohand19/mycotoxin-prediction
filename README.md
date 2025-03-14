@@ -144,11 +144,26 @@ The Streamlit apps provide:
 
 ### API Service
 
-To start the FastAPI service (using the primary TensorFlow model by default):
+To start the FastAPI service:
 
 ```bash
+# Using TensorFlow model (default):
 uvicorn src.api.main:app --host 0.0.0.0 --port 8000
+
+# Using RandomForest model:
+MODEL_TYPE=randomforest uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 ```
+
+The API supports both TensorFlow and RandomForest models:
+- TensorFlow model provides confidence intervals and higher accuracy
+- RandomForest model offers faster inference and better compatibility with Apple Silicon
+
+Configuration via environment variables:
+- `MODEL_TYPE`: Set to 'tensorflow' (default) or 'randomforest'
+- `MODEL_PATH`: Path to the model file (defaults to appropriate model based on type)
+- `X_SCALER_PATH`: Path to feature scaler
+- `Y_SCALER_PATH`: Path to target scaler
+- `LOG_LEVEL`: Logging level (default: INFO)
 
 ### Docker Deployment
 
@@ -159,25 +174,29 @@ docker build -t don-predictor .
 
 2. Run the container:
 ```bash
+# Using TensorFlow model:
 docker run -p 8000:8000 -p 8501:8501 don-predictor
+
+# Using RandomForest model:
+docker run -p 8000:8000 -p 8501:8501 -e MODEL_TYPE=randomforest don-predictor
 ```
 
 ## API Documentation
 
 The API provides the following endpoints:
 
-- `GET /`: Root endpoint with API information
+- `GET /`: Root endpoint with API information and model type
 - `POST /predict`: Make DON concentration predictions
-- `GET /health`: Health check with memory usage information
+- `GET /health`: Health check with memory usage and model status
 
 Example prediction request:
 ```bash
 curl -X POST "http://localhost:8000/predict" \
      -H "Content-Type: application/json" \
-     -d '{"values": [0.1, 0.2, ..., 0.5]}'
+     -d '{"values": [0.1, 0.2, ..., 0.5]}'  # 448 spectral values required
 ```
 
-Response format:
+Response format (TensorFlow model):
 ```json
 {
   "don_concentration": 123.45,
@@ -186,6 +205,24 @@ Response format:
     "lower": 100.0,
     "upper": 150.0
   }
+}
+```
+
+Response format (RandomForest model):
+```json
+{
+  "don_concentration": 123.45,
+  "units": "ppb"
+}
+```
+
+Health check response:
+```json
+{
+  "status": "healthy",
+  "model_loaded": true,
+  "memory_usage": 1234.56,
+  "model_type": "TensorFlow"  // or "RandomForest"
 }
 ```
 

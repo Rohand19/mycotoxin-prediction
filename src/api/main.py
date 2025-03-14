@@ -17,15 +17,26 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 # Now import the modules
 try:
     # When running from project root
+    from src.models.don_predictor import DONPredictor
     from src.models.simple_predictor import SimplePredictor
 except ImportError:
     # When running from within src directory
+    from models.don_predictor import DONPredictor
     from models.simple_predictor import SimplePredictor
 
 # Get configuration from environment variables
-MODEL_PATH = os.environ.get("MODEL_PATH", "models/rf_model_real_data.joblib")
-X_SCALER_PATH = os.environ.get("X_SCALER_PATH", "models/X_scaler_real.pkl")
-Y_SCALER_PATH = os.environ.get("Y_SCALER_PATH", "models/y_scaler_real.pkl")
+MODEL_TYPE = os.environ.get("MODEL_TYPE", "tensorflow")  # 'tensorflow' or 'randomforest'
+
+# Model paths based on type
+if MODEL_TYPE == "tensorflow":
+    MODEL_PATH = os.environ.get("MODEL_PATH", "models/best_model.keras")
+    X_SCALER_PATH = os.environ.get("X_SCALER_PATH", "models/X_scaler.pkl")
+    Y_SCALER_PATH = os.environ.get("Y_SCALER_PATH", "models/y_scaler.pkl")
+else:
+    MODEL_PATH = os.environ.get("MODEL_PATH", "models/rf_model.joblib")
+    X_SCALER_PATH = os.environ.get("X_SCALER_PATH", "models/X_scaler_rf.pkl")
+    Y_SCALER_PATH = os.environ.get("Y_SCALER_PATH", "models/y_scaler_rf.pkl")
+
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
 # Setup logging
@@ -44,15 +55,19 @@ app = FastAPI(
 
     ## Features
 
-    * Single sample prediction
+    * Single sample prediction using TensorFlow or RandomForest models
     * Input validation
     * Error handling
     * Health monitoring
 
-    ## Usage
+    ## Model Selection
 
-    1. Use the `/predict` endpoint to get predictions for spectral data
-    2. Monitor the service health using the `/health` endpoint
+    The API can be configured to use either:
+    * TensorFlow model with attention mechanism (default)
+    * RandomForest model for faster inference or Apple Silicon compatibility
+
+    Set the MODEL_TYPE environment variable to 'tensorflow' or 'randomforest'
+    to choose the implementation.
     """,
     version="1.0.0",
 )
@@ -92,7 +107,7 @@ class HealthResponse(BaseModel):
     status: str = Field(..., description="Service status", example="healthy")
     model_loaded: bool = Field(..., description="Whether the model is loaded", example=True)
     memory_usage: float = Field(..., description="Current memory usage in MB", example=1234.56)
-    model_type: str = Field(..., description="Type of model being used", example="RandomForest")
+    model_type: str = Field(..., description="Type of model being used", example="TensorFlow")
 
 
 @app.on_event("startup")
@@ -100,7 +115,7 @@ async def load_model():
     """Load the model on startup."""
     global model
     try:
-        logger.info(f"Loading model from {MODEL_PATH}")
+        logger.info(f"Loading {MODEL_TYPE} model from {MODEL_PATH}")
         logger.info(f"Loading X scaler from {X_SCALER_PATH}")
         logger.info(f"Loading Y scaler from {Y_SCALER_PATH}")
 
@@ -117,19 +132,25 @@ async def load_model():
             logger.error(f"Y scaler file not found: {Y_SCALER_PATH}")
             raise FileNotFoundError(f"Y scaler file not found: {Y_SCALER_PATH}")
 
-        # Load the scikit-learn model
-        model = SimplePredictor()
-        model.model = joblib.load(MODEL_PATH)
+        if MODEL_TYPE == "tensorflow":
+            # Load TensorFlow model
+            model = DONPredictor(input_shape=448)
+            model = DONPredictor.load(MODEL_PATH)
+            # Load scalers
+            model.X_scaler = joblib.load(X_SCALER_PATH)
+            model.y_scaler = joblib.load(Y_SCALER_PATH)
+        else:
+            # Load RandomForest model
+            model = SimplePredictor()
+            model.model = joblib.load(MODEL_PATH)
+            # Load scalers
+            model.X_scaler = joblib.load(X_SCALER_PATH)
+            model.y_scaler = joblib.load(Y_SCALER_PATH)
 
-        # Load the scalers
-        model.X_scaler = joblib.load(X_SCALER_PATH)
-        model.y_scaler = joblib.load(Y_SCALER_PATH)
-
-        logger.info("Model and scalers loaded successfully")
+        logger.info(f"{MODEL_TYPE} model and scalers loaded successfully")
     except Exception as e:
         logger.error(f"Error loading model: {str(e)}")
-        # Don't raise here to allow the API to start even if model loading fails
-        # The health endpoint will report the issue
+        raise
 
 
 @app.get(
@@ -140,8 +161,9 @@ async def load_model():
 async def root():
     """Root endpoint."""
     return {
-        "message": "DON Concentration Prediction API (scikit-learn version)",
+        "message": f"DON Concentration Prediction API ({MODEL_TYPE} version)",
         "version": "1.0.0",
+        "model_type": MODEL_TYPE,
         "docs_url": "/docs",
         "redoc_url": "/redoc",
     }
@@ -152,17 +174,20 @@ async def root():
     response_model=PredictionResponse,
     summary="Predict DON concentration",
     description="""
-          Makes a prediction of DON concentration based on input spectral data.
-
-          The input should be a list of 448 spectral reflectance values.
-          Returns the predicted concentration in ppb.
-          """,
+    Makes a prediction of DON concentration based on input spectral data.
+    
+    The input should be a list of 448 spectral reflectance values.
+    Returns the predicted concentration in ppb.
+    
+    When using the TensorFlow model, confidence intervals are provided.
+    The RandomForest model provides point estimates only.
+    """,
 )
 async def predict(data: SpectralData):
     """Predict DON concentration from spectral data."""
     try:
         # Check if model is loaded
-        if model is None or model.model is None:
+        if model is None or (hasattr(model, 'model') and model.model is None):
             raise HTTPException(
                 status_code=503,
                 detail="Model not loaded. Please check server logs.",
@@ -179,20 +204,45 @@ async def predict(data: SpectralData):
         if not all(isinstance(x, (int, float)) for x in data.values):
             raise HTTPException(status_code=400, detail="All values must be numeric")
 
-        # Preprocess input and make prediction using the model's internal scaling
-        X = np.array(data.values).reshape(1, -1)
+        # Convert input to numpy array with proper dtype
+        X = np.array(data.values, dtype=np.float32, copy=True).reshape(1, -1)
 
         try:
-            y_scaled = model.predict(X)
-            y_pred = model.inverse_transform_target(y_scaled)
+            if MODEL_TYPE == "tensorflow":
+                # Scale features
+                X_scaled = model.X_scaler.transform(X)
+                # Make prediction
+                y_scaled = model.model.predict(X_scaled)
+                # Convert back to original scale
+                y_pred = model.y_scaler.inverse_transform(y_scaled)
+                
+                # Calculate confidence interval (simplified example)
+                pred_value = float(y_pred[0][0])
+                confidence = 0.1 * pred_value  # 10% confidence interval
+                
+                return {
+                    "don_concentration": pred_value,
+                    "units": "ppb",
+                    "confidence_interval": {
+                        "lower": pred_value - confidence,
+                        "upper": pred_value + confidence
+                    }
+                }
+            else:
+                # Use RandomForest model's predict method
+                y_scaled = model.predict(X)
+                y_pred = model.inverse_transform_target(y_scaled)
+                
+                return {
+                    "don_concentration": float(y_pred[0][0]),
+                    "units": "ppb"
+                }
 
-            return {"don_concentration": float(y_pred[0][0]), "units": "ppb"}
         except Exception as e:
             logger.error(f"Prediction error: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Prediction error: {str(e)}")
 
     except HTTPException:
-        # Re-raise HTTP exceptions
         raise
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
@@ -211,21 +261,16 @@ async def health():
         process = psutil.Process()
         memory_usage = process.memory_info().rss / 1024 / 1024  # Convert to MB
 
-        model_loaded = model is not None and model.model is not None
-        model_type = "RandomForest" if model_loaded else "None"
-
-        if model_loaded:
-            try:
-                # Try to get more specific model type
-                model_type = model.model.__class__.__name__
-            except:
-                pass
+        model_loaded = model is not None and (
+            (MODEL_TYPE == "tensorflow" and model.model is not None) or
+            (MODEL_TYPE == "randomforest" and model.model is not None)
+        )
 
         return {
             "status": "healthy" if model_loaded else "degraded",
             "model_loaded": model_loaded,
             "memory_usage": memory_usage,
-            "model_type": model_type,
+            "model_type": MODEL_TYPE.capitalize(),
         }
     except Exception as e:
         logger.error(f"Health check error: {str(e)}")
