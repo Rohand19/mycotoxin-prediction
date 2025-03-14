@@ -62,14 +62,13 @@ class ModelTrainer:
     def _default_config(self):
         """Default training configuration."""
         return {
-            'batch_size': 32,  # Same size as reference
-            'epochs': 100,     # Double the epochs to give more time to converge
-            'validation_split': 0.20
-            ,  # Reduced validation split like reference
-            'early_stopping_patience': 10,  # Increased patience for better convergence
-            'reduce_lr_patience': 10,  # Increased patience for LR reduction
-            'min_lr': 0.00001, # Keep minimum learning rate
-            'model_checkpoint_path': 'models/best_model.keras'
+            "batch_size": 32,  # Same size as reference
+            "epochs": 100,  # Double the epochs to give more time to converge
+            "validation_split": 0.20,  # Reduced validation split like reference
+            "early_stopping_patience": 10,  # Increased patience for better convergence
+            "reduce_lr_patience": 10,  # Increased patience for LR reduction
+            "min_lr": 0.00001,  # Keep minimum learning rate
+            "model_checkpoint_path": "models/best_model.keras",
         }
 
     def _setup_logging(self):
@@ -156,7 +155,7 @@ class ModelTrainer:
                     restore_best_weights=True,
                     min_delta=0.0005,  # More sensitive min delta
                     mode="min",
-                    verbose=1
+                    verbose=1,
                 ),
                 tf.keras.callbacks.ModelCheckpoint(
                     self.config["model_checkpoint_path"],
@@ -167,11 +166,8 @@ class ModelTrainer:
                 ),
                 # Add TensorBoard for better visualization
                 tf.keras.callbacks.TensorBoard(
-                    log_dir='./logs',
-                    histogram_freq=1,
-                    write_graph=True,
-                    update_freq='epoch'
-                )
+                    log_dir="./logs", histogram_freq=1, write_graph=True, update_freq="epoch"
+                ),
             ]
 
             # Train model
@@ -184,14 +180,14 @@ class ModelTrainer:
             )
 
             logger.info("Training completed successfully")
-            
+
             # Log final metrics
-            final_epoch = len(history.history['loss'])
+            final_epoch = len(history.history["loss"])
             logger.info(f"Trained for {final_epoch} epochs")
             logger.info(f"Final training loss: {history.history['loss'][-1]:.4f}")
             logger.info(f"Final validation loss: {history.history['val_loss'][-1]:.4f}")
             logger.info(f"Final MAE: {history.history['mae'][-1]:.4f}")
-            
+
             return history
 
         except Exception as e:

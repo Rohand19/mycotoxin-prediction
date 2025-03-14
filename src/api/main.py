@@ -175,10 +175,10 @@ async def root():
     summary="Predict DON concentration",
     description="""
     Makes a prediction of DON concentration based on input spectral data.
-    
+
     The input should be a list of 448 spectral reflectance values.
     Returns the predicted concentration in ppb.
-    
+
     When using the TensorFlow model, confidence intervals are provided.
     The RandomForest model provides point estimates only.
     """,
@@ -187,7 +187,7 @@ async def predict(data: SpectralData):
     """Predict DON concentration from spectral data."""
     try:
         # Check if model is loaded
-        if model is None or (hasattr(model, 'model') and model.model is None):
+        if model is None or (hasattr(model, "model") and model.model is None):
             raise HTTPException(
                 status_code=503,
                 detail="Model not loaded. Please check server logs.",
@@ -215,28 +215,22 @@ async def predict(data: SpectralData):
                 y_scaled = model.model.predict(X_scaled)
                 # Convert back to original scale
                 y_pred = model.y_scaler.inverse_transform(y_scaled)
-                
+
                 # Calculate confidence interval (simplified example)
                 pred_value = float(y_pred[0][0])
                 confidence = 0.1 * pred_value  # 10% confidence interval
-                
+
                 return {
                     "don_concentration": pred_value,
                     "units": "ppb",
-                    "confidence_interval": {
-                        "lower": pred_value - confidence,
-                        "upper": pred_value + confidence
-                    }
+                    "confidence_interval": {"lower": pred_value - confidence, "upper": pred_value + confidence},
                 }
             else:
                 # Use RandomForest model's predict method
                 y_scaled = model.predict(X)
                 y_pred = model.inverse_transform_target(y_scaled)
-                
-                return {
-                    "don_concentration": float(y_pred[0][0]),
-                    "units": "ppb"
-                }
+
+                return {"don_concentration": float(y_pred[0][0]), "units": "ppb"}
 
         except Exception as e:
             logger.error(f"Prediction error: {str(e)}")
@@ -262,8 +256,8 @@ async def health():
         memory_usage = process.memory_info().rss / 1024 / 1024  # Convert to MB
 
         model_loaded = model is not None and (
-            (MODEL_TYPE == "tensorflow" and model.model is not None) or
-            (MODEL_TYPE == "randomforest" and model.model is not None)
+            (MODEL_TYPE == "tensorflow" and model.model is not None)
+            or (MODEL_TYPE == "randomforest" and model.model is not None)
         )
 
         return {

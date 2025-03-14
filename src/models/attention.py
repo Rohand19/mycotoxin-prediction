@@ -32,30 +32,16 @@ class MultiHeadSelfAttention(Layer):
 
         # Query, Key, and Value weight matrices
         self.query_dense = tf.keras.layers.Dense(
-            self.output_dim,
-            use_bias=self.use_bias,
-            name="query",
-            dtype=tf.float32
+            self.output_dim, use_bias=self.use_bias, name="query", dtype=tf.float32
         )
-        self.key_dense = tf.keras.layers.Dense(
-            self.output_dim,
-            use_bias=self.use_bias,
-            name="key",
-            dtype=tf.float32
-        )
+        self.key_dense = tf.keras.layers.Dense(self.output_dim, use_bias=self.use_bias, name="key", dtype=tf.float32)
         self.value_dense = tf.keras.layers.Dense(
-            self.output_dim,
-            use_bias=self.use_bias,
-            name="value",
-            dtype=tf.float32
+            self.output_dim, use_bias=self.use_bias, name="value", dtype=tf.float32
         )
 
         # Output projection
         self.combine_heads = tf.keras.layers.Dense(
-            self.input_dim,
-            use_bias=self.use_bias,
-            name="output",
-            dtype=tf.float32
+            self.input_dim, use_bias=self.use_bias, name="output", dtype=tf.float32
         )
 
         # Dropout layer
